@@ -1,0 +1,42 @@
+CREATE OR REPLACE FUNCTION UPDATE_CASE_FRAUD_TRIGGER_DATE (
+    p_case_key IN INTEGER,
+    p_alert_key IN INTEGER
+) RETURN VARCHAR2 IS
+    alert_fraud_trigger_date TIMESTAMP(6);
+    case_fraud_trigger_date TIMESTAMP(6);
+BEGIN
+    -- Get fraud_trigger_date from V_ALERT_DETAILS_FRAUD by alert_key
+    SELECT fraud_trigger_date INTO alert_fraud_trigger_date
+    FROM V_ALERT_DETAILS_FRAUD
+    WHERE alert_key = p_alert_key;
+
+    -- Get fraud_trigger_date from BMO_FCM_EXTENSIONS by case_key
+    SELECT fraud_trigger_date INTO case_fraud_trigger_date
+    FROM BMO_FCM_EXTENSIONS
+    WHERE case_key = p_case_key;
+
+    -- If alert_fraud_trigger_date is not null and older than case_fraud_trigger_date, update
+    IF alert_fraud_trigger_date IS NOT NULL THEN
+        IF case_fraud_trigger_date IS NULL OR alert_fraud_trigger_date < case_fraud_trigger_date THEN
+            UPDATE BMO_FCM_EXTENSIONS
+            SET fraud_trigger_date = alert_fraud_trigger_date
+            WHERE case_key = p_case_key;
+            RETURN 'Updated';
+        ELSE
+            RETURN 'No update needed';
+        END IF;
+    ELSE
+        RETURN 'Alert fraud_trigger_date is NULL';
+    END IF;
+--
+-- Exception handling section
+-- WHEN NO_DATA_FOUND: Catches cases where SELECT statements do not return any rows for the given keys.
+-- WHEN OTHERS: Catches all other exceptions. SQLERRM returns the error message associated with the exception.
+-- SQLERRM is an Oracle built-in function that provides the error message for the most recent error.
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN 'No data found for given keys';
+    WHEN OTHERS THEN
+        RETURN 'Error: ' || SQLERRM; -- SQLERRM returns the error message for the exception
+END;
+/
